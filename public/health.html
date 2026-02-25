@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Health Status</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .health-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2rem;
+        }
+        
+        .status-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status-label {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .status-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .indicator.online {
+            background: #28a745;
+        }
+        
+        .indicator.loading {
+            background: #ffc107;
+        }
+        
+        .indicator.offline {
+            background: #dc3545;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .timestamp {
+            text-align: center;
+            color: #6c757d;
+            margin-top: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #667eea;
+            padding: 20px;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #dc3545;
+        }
+        
+        .back-link {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="health-card">
+        <h1>🏥 API Health Status</h1>
+        
+        <div id="health-data" class="loading">
+            <p>Loading health status...</p>
+        </div>
+        
+        <div class="back-link">
+            <a href="/">← Back to Documentation</a>
+        </div>
+    </div>
+    
+    <script>
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                
+                const healthHtml = `
+                    <div class="status-container">
+                        <div class="status-item">
+                            <span class="status-label">API Status</span>
+                            <div class="status-value">
+                                <span class="indicator ${data.status === 'healthy' ? 'online' : 'offline'}"></span>
+                                <span>${data.status === 'healthy' ? 'Online' : 'Offline'}</span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Database Connection</span>
+                            <div class="status-value">
+                                <span class="indicator ${data.database ? 'online' : 'offline'}"></span>
+                                <span>${data.database ? 'Connected' : 'Disconnected'}</span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Uptime</span>
+                            <div class="status-value">
+                                <span>${formatUptime(data.uptime)}</span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Environment</span>
+                            <div class="status-value">
+                                <span>${data.environment || 'production'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timestamp">
+                        Last checked: ${new Date().toLocaleString()}
+                    </div>
+                `;
+                
+                document.getElementById('health-data').innerHTML = healthHtml;
+            } catch (error) {
+                document.getElementById('health-data').innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> Unable to connect to API. ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function formatUptime(seconds) {
+            if (!seconds) return 'N/A';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+        
+        // Check health on load
+        checkHealth();
+        
+        // Refresh every 30 seconds
+        setInterval(checkHealth, 30000);
+    </script>
+    
+    <!-- Vercel Speed Insights -->
+    <script>
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
+</body>
+</html>

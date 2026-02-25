@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Claimer API - Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .section h3 {
+            color: #764ba2;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+        
+        .endpoint {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .endpoint code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d63384;
+        }
+        
+        .method {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-right: 10px;
+        }
+        
+        .method.get {
+            background: #28a745;
+            color: white;
+        }
+        
+        .method.post {
+            background: #007bff;
+            color: white;
+        }
+        
+        .method.put {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .method.delete {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .feature-card h4 {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #28a745;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        
+        footer {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            text-align: center;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Job Claimer API</h1>
+            <p>MongoDB-Powered Job Management API</p>
+            <div class="status-badge">🟢 API Online</div>
+        </header>
+        
+        <div class="content">
+            <div class="section">
+                <h2>📋 About</h2>
+                <p>
+                    A modern, scalable REST API for job claiming and management. Built with Express.js and MongoDB,
+                    featuring JWT authentication, role-based access control, and file upload capabilities.
+                </p>
+            </div>
+            
+            <div class="section">
+                <h2>✨ Features</h2>
+                <div class="features">
+                    <div class="feature-card">
+                        <h4>🔐 Secure Authentication</h4>
+                        <p>JWT-based authentication with bcrypt password hashing</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>👥 User Management</h4>
+                        <p>Admin and member roles with granular permissions</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📁 File Uploads</h4>
+                        <p>PDF submission support with validation</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>⚡ Fast & Scalable</h4>
+                        <p>MongoDB-optimized for performance</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🔌 API Endpoints</h2>
+                
+                <h3>Authentication</h3>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <code>/api/users/register</code>
+                    <p>Register a new user account</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <code>/api/users/login</code>
+                    <p>Login and receive JWT token</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <code>/api/users/me</code>
+                    <p>Get current authenticated user (requires token)</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <code>/api/users</code>
+                    <p>Get all users (admin only)</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <code>/api/users/:id</code>
+                    <p>Update user details (admin only)</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <code>/api/users/:id</code>
+                    <p>Delete a user (admin only)</p>
+                </div>
+                
+                <h3>Jobs Management</h3>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <code>/api/jobs</code>
+                    <p>Get all jobs with optional filtering (status, category, priority, search)</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <code>/api/jobs/:id</code>
+                    <p>Get a specific job by ID</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <code>/api/jobs</code>
+                    <p>Create a new job (admin only)</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <code>/api/jobs/:id</code>
+                    <p>Update job details (admin only)</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <code>/api/jobs/:id/claim</code>
+                    <p>Claim a job for yourself</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <code>/api/jobs/:id/unclaim</code>
+                    <p>Unclaim a job</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <code>/api/jobs/:id/submit</code>
+                    <p>Submit work for a claimed job (includes PDF file upload)</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <code>/api/jobs/:id</code>
+                    <p>Delete a job (admin only)</p>
+                </div>
+                
+                <h3>Health & Status</h3>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <code>/</code>
+                    <p>API health check and status</p>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <code>/health</code>
+                    <p>Detailed health check with database status</p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🛠️ Getting Started</h2>
+                <p>To integrate with this API:</p>
+                <ol style="margin-left: 20px; margin-top: 10px;">
+                    <li>Register a user account via <code>/api/users/register</code></li>
+                    <li>Login to receive your JWT token via <code>/api/users/login</code></li>
+                    <li>Include the token in the Authorization header: <code>Bearer YOUR_TOKEN</code></li>
+                    <li>Make authenticated requests to the API endpoints</li>
+                </ol>
+            </div>
+            
+            <div class="section">
+                <h2>📚 Resources</h2>
+                <p>
+                    For more information, check out the 
+                    <a href="https://github.com/mediaxsd-commits/stratcomjobsend" target="_blank">GitHub repository</a>
+                    or contact the development team.
+                </p>
+            </div>
+        </div>
+        
+        <footer>
+            <p>&copy; 2026 Job Claimer API. Built with Express.js & MongoDB.</p>
+        </footer>
+    </div>
+    
+    <!-- Vercel Speed Insights -->
+    <script>
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
+</body>
+</html>
