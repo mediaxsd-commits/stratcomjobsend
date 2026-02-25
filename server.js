@@ -24,6 +24,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Serve static files (HTML pages with Speed Insights)
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -583,6 +586,19 @@ app.get('/api/jobs/:id/download', authenticateToken, async (req, res) => {
     console.error('Download PDF error:', error);
     res.status(500).json({ error: 'Failed to download PDF' });
   }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const healthCheck = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: NODE_ENV,
+    database: mongoose.connection.readyState === 1
+  };
+  
+  res.status(200).json(healthCheck);
 });
 
 // Start server (local development)
