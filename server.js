@@ -14,7 +14,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // CORS Configuration
 const corsOptions = {
   origin: NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL, 'https://yourdomain.com'] // Replace with your actual domain
+    ? [process.env.FRONTEND_URL, 'https://stratcom-jobs.onrender.com'].filter(Boolean)
     : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:8080'],
   credentials: true,
   optionsSuccessStatus: 200
@@ -23,6 +23,11 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
