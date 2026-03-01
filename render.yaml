@@ -1,0 +1,31 @@
+# Render Blueprint — Backend API (Express + MongoDB)
+# https://render.com/docs/blueprint-spec
+#
+# Deploy: Dashboard → Blueprints → New Blueprint Instance → connect this repo
+
+services:
+  - type: web
+    name: stratcom-jobs-api
+    runtime: node
+    region: oregon
+    plan: starter              # $7/mo, always on (change to "free" if preferred)
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: MONGODB_URI
+        sync: false            # You will be prompted to enter this
+      - key: JWT_SECRET
+        generateValue: true    # Render auto-generates a secure random string
+      - key: FRONTEND_URL
+        value: https://stratcom-jobs.onrender.com
+      - key: MAX_FILE_SIZE
+        value: "5242880"       # 5 MB
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 1               # Persistent storage for PDF uploads
