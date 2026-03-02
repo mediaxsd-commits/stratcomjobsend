@@ -11,52 +11,6 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Email service for password resets - Uses HTTP API (Resend) to bypass SMTP port blocking
-const sendResetEmail = async (toEmail, userName, code) => {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || 'Stratcom Jobs <onboarding@resend.dev>';
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [toEmail],
-      subject: 'Password Reset Code - Stratcom Jobs',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-          <div style="background: #000; padding: 20px; text-align: center;">
-            <h1 style="color: #fff; margin: 0; font-size: 24px;">Stratcom Jobs</h1>
-          </div>
-          <div style="padding: 30px 20px; border: 1px solid #e5e5e5; border-top: none;">
-            <h2 style="margin-top: 0;">Password Reset</h2>
-            <p>Hi ${userName},</p>
-            <p>You requested a password reset. Use the code below to set a new password:</p>
-            <div style="background: #f5f5f5; border: 2px solid #000; padding: 20px; text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">${code}</span>
-            </div>
-            <p style="color: #666; font-size: 14px;">This code expires in <strong>1 hour</strong>.</p>
-            <p style="color: #666; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
-          </div>
-          <div style="padding: 15px; text-align: center; color: #999; font-size: 12px;">
-            &copy; Stratcom Jobs Platform
-          </div>
-        </div>
-      `,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.message || 'Failed to send email');
-  }
-
-  return response.json();
-};
-
 // CORS Configuration
 const corsOptions = {
   origin: NODE_ENV === 'production' 
@@ -76,37 +30,6 @@ app.get('/health', (req, res) => {
 });
 
 // SMTP test endpoint
-app.get('/api/test-email', async (req, res) => {
-  try {
-    const RESEND_API_KEY = process.env.RESEND_API_KEY;
-    if (!RESEND_API_KEY) {
-      return res.status(500).json({ status: 'failed', error: 'RESEND_API_KEY not set' });
-    }
-    // Test by sending to the configured user
-    const testResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM || 'Stratcom Jobs <onboarding@resend.dev>',
-        to: [process.env.SMTP_USER || 'test@example.com'],
-        subject: 'SMTP Test - Stratcom Jobs',
-        html: '<p>Email sending is working!</p>',
-      }),
-    });
-    const data = await testResponse.json();
-    if (!testResponse.ok) {
-      return res.status(500).json({ status: 'Email send failed', error: data.message || JSON.stringify(data) });
-    }
-    res.json({ status: 'Email sent successfully', data });
-  } catch (error) {
-    console.error('Email test failed:', error);
-    res.status(500).json({ status: 'Email test failed', error: error.message });
-  }
-});
-
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -405,14 +328,14 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Forgot password - generate reset code and email it to user
+// Forgot password - generate reset code (admin provides code to user)
 app.post('/api/users/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
     if (!user) {
       // Don't reveal whether email exists
-      return res.json({ message: 'If an account with that email exists, a reset code has been sent to your email.' });
+      return res.json({ message: 'If an account with that email exists, a reset request has been created. Please contact your administrator for the reset code.' });
     }
 
     // Generate 6-digit code
@@ -425,17 +348,9 @@ app.post('/api/users/forgot-password', async (req, res) => {
     // Create new reset code
     await new PasswordReset({ userId: user._id, code, expiresAt }).save();
 
-    // Send email with reset code
-    try {
-      await sendResetEmail(user.email, user.name, code);
-      console.log(`Password reset code sent to ${email}`);
-    } catch (emailErr) {
-      console.error('Failed to send reset email:', emailErr.message);
-      // Still save the code so admin can provide it as fallback
-      console.log(`Fallback - Password reset code for ${email}: ${code}`);
-    }
+    console.log(`Password reset code for ${email}: ${code}`);
 
-    res.json({ message: 'If an account with that email exists, a reset code has been sent to your email.' });
+    res.json({ message: 'If an account with that email exists, a reset request has been created. Please contact your administrator for the reset code.' });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ error: 'Failed to process request' });
