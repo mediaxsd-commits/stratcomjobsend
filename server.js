@@ -21,6 +21,9 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
 const sendResetEmail = async (toEmail, userName, code) => {
@@ -69,6 +72,25 @@ app.use(express.json());
 // Health check endpoint for Render
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// SMTP test endpoint
+app.get('/api/test-email', async (req, res) => {
+  try {
+    console.log('SMTP Config:', {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: process.env.SMTP_SECURE,
+      user: process.env.SMTP_USER,
+      from: process.env.SMTP_FROM,
+      passSet: !!process.env.SMTP_PASS
+    });
+    await transporter.verify();
+    res.json({ status: 'SMTP connection successful', config: { host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, secure: process.env.SMTP_SECURE, user: process.env.SMTP_USER } });
+  } catch (error) {
+    console.error('SMTP test failed:', error);
+    res.status(500).json({ status: 'SMTP connection failed', error: error.message, config: { host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, secure: process.env.SMTP_SECURE, user: process.env.SMTP_USER } });
+  }
 });
 
 // Serve uploaded files
