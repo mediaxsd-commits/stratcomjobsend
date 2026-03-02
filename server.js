@@ -93,8 +93,19 @@ const JobSchema = new mongoose.Schema({
   }
 });
 
+const ActivityLogSchema = new mongoose.Schema({
+  jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'Job', required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  action: { type: String, required: true, enum: ['created', 'edited', 'claimed', 'status_changed', 'pdf_submitted', 'deleted'] },
+  details: { type: String },
+  previousValue: { type: String },
+  newValue: { type: String },
+  timestamp: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Job = mongoose.model('Job', JobSchema);
+const ActivityLog = mongoose.model('ActivityLog', ActivityLogSchema);
 
 // Create default admin user
 const createDefaultAdmin = async () => {
@@ -307,6 +318,62 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Update own profile
+app.put('/api/users/me', authenticateToken, async (req, res) => {
+  try {
+    const { name, email, currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (newPassword) {
+      if (!currentPassword) return res.status(400).json({ error: 'Current password is required' });
+      const valid = await bcrypt.compare(currentPassword, user.password);
+      if (!valid) return res.status(400).json({ error: 'Current password is incorrect' });
+      user.password = await bcrypt.hash(newPassword, 10);
+    }
+    if (name) user.name = name;
+    if (email && email !== user.email) {
+      const exists = await User.findOne({ email });
+      if (exists) return res.status(400).json({ error: 'Email already in use' });
+      user.email = email;
+    }
+    await user.save();
+
+    const token = jwt.sign(
+      { userId: user._id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+    );
+
+    res.json({ id: user._id.toString(), name: user.name, email: user.email, role: user.role, token });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Get activity log for a job
+app.get('/api/jobs/:id/activity', authenticateToken, async (req, res) => {
+  try {
+    const logs = await ActivityLog.find({ jobId: req.params.id })
+      .populate('userId', 'name email')
+      .sort({ timestamp: -1 });
+    res.json(logs.map(log => ({
+      id: log._id.toString(),
+      jobId: log.jobId.toString(),
+      user: log.userId ? { id: log.userId._id.toString(), name: log.userId.name, email: log.userId.email } : null,
+      action: log.action,
+      details: log.details,
+      previousValue: log.previousValue,
+      newValue: log.newValue,
+      timestamp: log.timestamp
+    })));
+  } catch (error) {
+    console.error('Get activity log error:', error);
+    res.status(500).json({ error: 'Failed to get activity log' });
+  }
+});
+
 // Job routes (with authentication)
 app.get('/api/jobs', authenticateToken, async (req, res) => {
   try {
@@ -370,6 +437,9 @@ app.post('/api/jobs', authenticateToken, async (req, res) => {
     
     const job = new Job(jobData);
     await job.save();
+
+    // Log activity
+    await new ActivityLog({ jobId: job._id, userId: req.user.userId, action: 'created', details: `Created job: ${job.title}` }).save();
     
     // Transform MongoDB document to include id field and format populated objects
     const transformedJob = {
@@ -420,6 +490,7 @@ app.get('/api/jobs/:id', authenticateToken, async (req, res) => {
 // Update job
 app.put('/api/jobs/:id', authenticateToken, async (req, res) => {
   try {
+    const oldJob = await Job.findById(req.params.id);
     const job = await Job.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -431,6 +502,9 @@ app.put('/api/jobs/:id', authenticateToken, async (req, res) => {
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
     }
+
+    // Log activity
+    await new ActivityLog({ jobId: job._id, userId: req.user.userId, action: 'edited', details: `Edited job: ${job.title}` }).save();
     
     // Transform MongoDB document to include id field
     const transformedJob = {
@@ -448,11 +522,16 @@ app.put('/api/jobs/:id', authenticateToken, async (req, res) => {
 // Delete job
 app.delete('/api/jobs/:id', authenticateToken, async (req, res) => {
   try {
-    const job = await Job.findByIdAndDelete(req.params.id);
+    const job = await Job.findById(req.params.id);
     
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
     }
+
+    // Log activity before deletion
+    await new ActivityLog({ jobId: job._id, userId: req.user.userId, action: 'deleted', details: `Deleted job: ${job.title}` }).save();
+
+    await Job.findByIdAndDelete(req.params.id);
     
     res.json({ message: 'Job deleted successfully' });
   } catch (error) {
@@ -479,6 +558,9 @@ app.post('/api/jobs/:id/claim', authenticateToken, async (req, res) => {
     job.claimedAt = new Date();
     
     await job.save();
+
+    // Log activity
+    await new ActivityLog({ jobId: job._id, userId: req.user.userId, action: 'claimed', details: `Claimed job: ${job.title}`, previousValue: 'open', newValue: 'claimed' }).save();
     
     // Populate user info for response
     await job.populate('claimedBy', 'name email');
@@ -505,9 +587,13 @@ app.post('/api/jobs/:id/status', authenticateToken, async (req, res) => {
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
     }
-    
+
+    const previousStatus = job.status;
     job.status = status;
     await job.save();
+
+    // Log activity
+    await new ActivityLog({ jobId: job._id, userId: req.user.userId, action: 'status_changed', details: `Status: ${previousStatus} → ${status}`, previousValue: previousStatus, newValue: status }).save();
     
     // Populate user info for response
     await job.populate('claimedBy', 'name email');
@@ -556,6 +642,9 @@ app.post('/api/jobs/:id/submit', authenticateToken, upload.single('submission'),
     
     job.status = 'completed';
     await job.save();
+
+    // Log activity
+    await new ActivityLog({ jobId: job._id, userId: req.user.userId, action: 'pdf_submitted', details: `Submitted PDF: ${req.file.originalname}`, newValue: 'completed' }).save();
     
     await job.populate('submissionFile.uploadedBy', 'name email');
     
