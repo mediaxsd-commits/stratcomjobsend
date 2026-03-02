@@ -12,26 +12,46 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Email transporter for password resets - Force IPv4 to avoid Render IPv6 issues
+// Email transporter for password resets - Force IPv4 for Render compatibility
 const dns = require('dns');
-dns.setDefaultResultOrder('ipv4first');
+const net = require('net');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  socketTimeout: 15000,
-  connectionTimeout: 15000
-});
+// Create transporter that resolves hostname to IPv4 first
+const createTransporter = async () => {
+  let host = process.env.SMTP_HOST;
+  
+  // Resolve hostname to IPv4 address to bypass IPv6 issues on Render
+  if (host && !net.isIP(host)) {
+    try {
+      const addresses = await dns.promises.resolve4(host);
+      if (addresses && addresses.length > 0) {
+        console.log(`Resolved ${host} to IPv4: ${addresses[0]}`);
+        host = addresses[0];
+      }
+    } catch (err) {
+      console.log(`Could not resolve ${host} to IPv4, using hostname:`, err.message);
+    }
+  }
+
+  return nodemailer.createTransport({
+    host: host,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false,
+      servername: process.env.SMTP_HOST // Use original hostname for TLS
+    },
+    socketTimeout: 15000,
+    connectionTimeout: 15000
+  });
+};
 
 const sendResetEmail = async (toEmail, userName, code) => {
+  const transporter = await createTransporter();
   const mailOptions = {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: toEmail,
@@ -90,7 +110,8 @@ app.get('/api/test-email', async (req, res) => {
       from: process.env.SMTP_FROM,
       passSet: !!process.env.SMTP_PASS
     });
-    await transporter.verify();
+    const testTransporter = await createTransporter();
+    await testTransporter.verify();
     res.json({ status: 'SMTP connection successful', config: { host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, secure: process.env.SMTP_SECURE, user: process.env.SMTP_USER } });
   } catch (error) {
     console.error('SMTP test failed:', error);
