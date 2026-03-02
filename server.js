@@ -23,7 +23,8 @@ const transporter = nodemailer.createTransport({
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4
 });
 
 const sendResetEmail = async (toEmail, userName, code) => {
