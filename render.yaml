@@ -8,7 +8,7 @@ services:
     name: stratcom-jobs-api
     runtime: node
     region: oregon
-    plan: starter              # $7/mo, always on (change to "free" if preferred)
+    plan: free
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /health
@@ -25,7 +25,3 @@ services:
         value: https://stratcom-jobs.onrender.com
       - key: MAX_FILE_SIZE
         value: "5242880"       # 5 MB
-    disk:
-      name: uploads
-      mountPath: /opt/render/project/src/uploads
-      sizeGB: 1               # Persistent storage for PDF uploads
