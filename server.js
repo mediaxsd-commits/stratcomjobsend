@@ -103,9 +103,18 @@ const ActivityLogSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 });
 
+const PasswordResetSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  code: { type: String, required: true },
+  expiresAt: { type: Date, required: true },
+  used: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Job = mongoose.model('Job', JobSchema);
 const ActivityLog = mongoose.model('ActivityLog', ActivityLogSchema);
+const PasswordReset = mongoose.model('PasswordReset', PasswordResetSchema);
 
 // Create default admin user
 const createDefaultAdmin = async () => {
@@ -315,6 +324,121 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Forgot password - generate reset code
+app.post('/api/users/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal whether email exists
+      return res.json({ message: 'If an account with that email exists, a reset code has been generated.' });
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Invalidate any existing reset codes for this user
+    await PasswordReset.updateMany({ userId: user._id, used: false }, { used: true });
+
+    // Create new reset code
+    await new PasswordReset({ userId: user._id, code, expiresAt }).save();
+
+    console.log(`Password reset code for ${email}: ${code}`);
+
+    res.json({ message: 'If an account with that email exists, a reset code has been generated.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+// Reset password with code
+app.post('/api/users/reset-password', async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid reset code or email' });
+    }
+
+    const resetRecord = await PasswordReset.findOne({
+      userId: user._id,
+      code,
+      used: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!resetRecord) {
+      return res.status(400).json({ error: 'Invalid or expired reset code' });
+    }
+
+    // Update password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    // Mark code as used
+    resetRecord.used = true;
+    await resetRecord.save();
+
+    res.json({ message: 'Password reset successfully. You can now sign in.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Admin: get pending reset requests
+app.get('/api/users/reset-requests', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const resets = await PasswordReset.find({ used: false, expiresAt: { $gt: new Date() } })
+      .populate('userId', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json(resets.map(r => ({
+      id: r._id.toString(),
+      user: r.userId ? { id: r.userId._id.toString(), name: r.userId.name, email: r.userId.email } : null,
+      code: r.code,
+      expiresAt: r.expiresAt,
+      createdAt: r.createdAt
+    })));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get reset requests' });
+  }
+});
+
+// Admin: directly reset a user's password
+app.post('/api/users/:id/reset-password', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    // Invalidate any pending reset codes
+    await PasswordReset.updateMany({ userId: user._id, used: false }, { used: true });
+
+    res.json({ message: `Password reset successfully for ${user.name}` });
+  } catch (error) {
+    console.error('Admin reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 
