@@ -4,12 +4,54 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
+const nodemailer = require('nodemailer');
 const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Email transporter for password resets
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const sendResetEmail = async (toEmail, userName, code) => {
+  const mailOptions = {
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: toEmail,
+    subject: 'Password Reset Code - Stratcom Jobs',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+        <div style="background: #000; padding: 20px; text-align: center;">
+          <h1 style="color: #fff; margin: 0; font-size: 24px;">Stratcom Jobs</h1>
+        </div>
+        <div style="padding: 30px 20px; border: 1px solid #e5e5e5; border-top: none;">
+          <h2 style="margin-top: 0;">Password Reset</h2>
+          <p>Hi ${userName},</p>
+          <p>You requested a password reset. Use the code below to set a new password:</p>
+          <div style="background: #f5f5f5; border: 2px solid #000; padding: 20px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">${code}</span>
+          </div>
+          <p style="color: #666; font-size: 14px;">This code expires in <strong>1 hour</strong>.</p>
+          <p style="color: #666; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+        </div>
+        <div style="padding: 15px; text-align: center; color: #999; font-size: 12px;">
+          &copy; Stratcom Jobs Platform
+        </div>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
 
 // CORS Configuration
 const corsOptions = {
@@ -327,14 +369,14 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Forgot password - generate reset code
+// Forgot password - generate reset code and email it to user
 app.post('/api/users/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
     if (!user) {
       // Don't reveal whether email exists
-      return res.json({ message: 'If an account with that email exists, a reset code has been generated.' });
+      return res.json({ message: 'If an account with that email exists, a reset code has been sent to your email.' });
     }
 
     // Generate 6-digit code
@@ -347,9 +389,17 @@ app.post('/api/users/forgot-password', async (req, res) => {
     // Create new reset code
     await new PasswordReset({ userId: user._id, code, expiresAt }).save();
 
-    console.log(`Password reset code for ${email}: ${code}`);
+    // Send email with reset code
+    try {
+      await sendResetEmail(user.email, user.name, code);
+      console.log(`Password reset code sent to ${email}`);
+    } catch (emailErr) {
+      console.error('Failed to send reset email:', emailErr.message);
+      // Still save the code so admin can provide it as fallback
+      console.log(`Fallback - Password reset code for ${email}: ${code}`);
+    }
 
-    res.json({ message: 'If an account with that email exists, a reset code has been generated.' });
+    res.json({ message: 'If an account with that email exists, a reset code has been sent to your email.' });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ error: 'Failed to process request' });
