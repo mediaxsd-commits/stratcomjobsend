@@ -12,7 +12,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Email transporter for password resets
+// Email transporter for password resets - Force IPv4 to avoid Render IPv6 issues
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -24,7 +27,8 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   },
-  family: 4
+  socketTimeout: 15000,
+  connectionTimeout: 15000
 });
 
 const sendResetEmail = async (toEmail, userName, code) => {
