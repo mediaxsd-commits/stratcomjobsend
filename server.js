@@ -4,7 +4,6 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const nodemailer = require('nodemailer');
 const path = require('path');
 require('dotenv').config();
 
@@ -12,73 +11,50 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Email transporter for password resets - Force IPv4 for Render compatibility
-const dns = require('dns');
-const net = require('net');
+// Email service for password resets - Uses HTTP API (Resend) to bypass SMTP port blocking
+const sendResetEmail = async (toEmail, userName, code) => {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM || 'Stratcom Jobs <onboarding@resend.dev>';
 
-// Create transporter that resolves hostname to IPv4 first
-const createTransporter = async () => {
-  let host = process.env.SMTP_HOST;
-  
-  // Resolve hostname to IPv4 address to bypass IPv6 issues on Render
-  if (host && !net.isIP(host)) {
-    try {
-      const addresses = await dns.promises.resolve4(host);
-      if (addresses && addresses.length > 0) {
-        console.log(`Resolved ${host} to IPv4: ${addresses[0]}`);
-        host = addresses[0];
-      }
-    } catch (err) {
-      console.log(`Could not resolve ${host} to IPv4, using hostname:`, err.message);
-    }
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [toEmail],
+      subject: 'Password Reset Code - Stratcom Jobs',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+          <div style="background: #000; padding: 20px; text-align: center;">
+            <h1 style="color: #fff; margin: 0; font-size: 24px;">Stratcom Jobs</h1>
+          </div>
+          <div style="padding: 30px 20px; border: 1px solid #e5e5e5; border-top: none;">
+            <h2 style="margin-top: 0;">Password Reset</h2>
+            <p>Hi ${userName},</p>
+            <p>You requested a password reset. Use the code below to set a new password:</p>
+            <div style="background: #f5f5f5; border: 2px solid #000; padding: 20px; text-align: center; margin: 20px 0;">
+              <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">${code}</span>
+            </div>
+            <p style="color: #666; font-size: 14px;">This code expires in <strong>1 hour</strong>.</p>
+            <p style="color: #666; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+          </div>
+          <div style="padding: 15px; text-align: center; color: #999; font-size: 12px;">
+            &copy; Stratcom Jobs Platform
+          </div>
+        </div>
+      `,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || 'Failed to send email');
   }
 
-  return nodemailer.createTransport({
-    host: host,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false,
-      servername: process.env.SMTP_HOST // Use original hostname for TLS
-    },
-    socketTimeout: 15000,
-    connectionTimeout: 15000
-  });
-};
-
-const sendResetEmail = async (toEmail, userName, code) => {
-  const transporter = await createTransporter();
-  const mailOptions = {
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to: toEmail,
-    subject: 'Password Reset Code - Stratcom Jobs',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-        <div style="background: #000; padding: 20px; text-align: center;">
-          <h1 style="color: #fff; margin: 0; font-size: 24px;">Stratcom Jobs</h1>
-        </div>
-        <div style="padding: 30px 20px; border: 1px solid #e5e5e5; border-top: none;">
-          <h2 style="margin-top: 0;">Password Reset</h2>
-          <p>Hi ${userName},</p>
-          <p>You requested a password reset. Use the code below to set a new password:</p>
-          <div style="background: #f5f5f5; border: 2px solid #000; padding: 20px; text-align: center; margin: 20px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">${code}</span>
-          </div>
-          <p style="color: #666; font-size: 14px;">This code expires in <strong>1 hour</strong>.</p>
-          <p style="color: #666; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
-        </div>
-        <div style="padding: 15px; text-align: center; color: #999; font-size: 12px;">
-          &copy; Stratcom Jobs Platform
-        </div>
-      </div>
-    `,
-  };
-
-  await transporter.sendMail(mailOptions);
+  return response.json();
 };
 
 // CORS Configuration
@@ -102,20 +78,32 @@ app.get('/health', (req, res) => {
 // SMTP test endpoint
 app.get('/api/test-email', async (req, res) => {
   try {
-    console.log('SMTP Config:', {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: process.env.SMTP_SECURE,
-      user: process.env.SMTP_USER,
-      from: process.env.SMTP_FROM,
-      passSet: !!process.env.SMTP_PASS
+    const RESEND_API_KEY = process.env.RESEND_API_KEY;
+    if (!RESEND_API_KEY) {
+      return res.status(500).json({ status: 'failed', error: 'RESEND_API_KEY not set' });
+    }
+    // Test by sending to the configured user
+    const testResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: process.env.EMAIL_FROM || 'Stratcom Jobs <onboarding@resend.dev>',
+        to: [process.env.SMTP_USER || 'test@example.com'],
+        subject: 'SMTP Test - Stratcom Jobs',
+        html: '<p>Email sending is working!</p>',
+      }),
     });
-    const testTransporter = await createTransporter();
-    await testTransporter.verify();
-    res.json({ status: 'SMTP connection successful', config: { host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, secure: process.env.SMTP_SECURE, user: process.env.SMTP_USER } });
+    const data = await testResponse.json();
+    if (!testResponse.ok) {
+      return res.status(500).json({ status: 'Email send failed', error: data.message || JSON.stringify(data) });
+    }
+    res.json({ status: 'Email sent successfully', data });
   } catch (error) {
-    console.error('SMTP test failed:', error);
-    res.status(500).json({ status: 'SMTP connection failed', error: error.message, config: { host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, secure: process.env.SMTP_SECURE, user: process.env.SMTP_USER } });
+    console.error('Email test failed:', error);
+    res.status(500).json({ status: 'Email test failed', error: error.message });
   }
 });
 
